@@ -17,8 +17,6 @@ rankall <- function(outcome, num = "best") {
   
   target.column <- paste("Hospital.30.Day.Death..Mortality..Rates.from.", normalize.outcome(outcome), sep = "")
 
-  result <- data.frame(hospital = character(), state = character())
-
   do.call("rbind", lapply(levels(outcome.data$State), function(state) {
     state.data <- outcome.data[outcome.data$State == state, ]
     state.data[, target.column] <- as.numeric(state.data[, target.column])
@@ -36,7 +34,6 @@ rankall <- function(outcome, num = "best") {
     data.frame(hospital = chosen_hospital$Hospital.Name, state = state)
   }))
 }
-
 
 normalize.outcome <- function(outcome) {
   library(stringi)
