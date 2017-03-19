@@ -3,8 +3,8 @@ title: "Course 6 - Project - Part 2"
 author: "Bruno Assis"
 date: "19/03/2017"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -22,9 +22,10 @@ Now in the second portion of the project, we're going to analyze the ToothGrowth
 3. Use confidence intervals and/or hypothesis tests to compare tooth growth by supp and dose. (Only use the techniques from class, even if there's other approaches worth considering)
 4. State your conclusions and the assumptions needed for your conclusions.
 
-## Loading ToothGrowth Data
+## Loading ToothGrowth Data and support libraries
 
 ```{r}
+library(ggplot2)
 data("ToothGrowth")
 ```
 
@@ -34,6 +35,7 @@ data("ToothGrowth")
 tooth.df <- data.frame(ToothGrowth)
 dim(tooth.df)
 head(tooth.df)
+summary(tooth.df)
 ```
 
 Let's convert the `supplement` and `dose` attributes to factors:
@@ -42,11 +44,51 @@ tooth.df$supp <- factor(tooth.df$supp)
 tooth.df$dose <- factor(tooth.df$dose)
 ```
 
-Let's plot the data:
+Let's plot a boxplot comparing each `supplement` effect on the teeth's `length`:
 ```{r}
-ggplot(tooth.df, aes(x=supp, y=len)) +
-  geom_boxplot(aes(fill=supp))
+ggplot(tooth.df, aes(x = supp, y = len)) +
+  geom_boxplot(aes(fill = supp))
 ```
 
-### Basic Summary of Data
-## Conclusions
+We see there's little difference between the `length` of each `supplement`.
+
+Let's plot a histogram comparing each `dose` effect on the teeth's `length`:
+```{r}
+ggplot(tooth.df, aes(x = len, fill = dose)) +
+  geom_histogram()
+```
+
+We can see there is a relation between the given `dose` and the teeth's `length`.
+
+### Comparing Supplements and their Doses to Teeth Length
+
+Let's first compare the difference between supplements without looking at dosage:
+
+```{r}
+t.test(len ~ supp, paired = FALSE, var.equal = FALSE, data = tooth.df)
+```
+
+Now let's compare the difference between dosages without looking at the supplement:
+
+```{r}
+dosages <- unique(tooth.df$dose)
+len.dosages <- length(dosages)
+
+for (i in 1:(len.dosages-1)) {
+    for (j in (i+1):len.dosages) {
+      print(paste("T-Test between", dosages[i], "dosage and", dosages[j], "dosage"))
+      print(t.test(subset(tooth.df, tooth.df$dose == dosages[i])$len,
+                   subset(tooth.df, tooth.df$dose == dosages[j])$len,
+                   paired = FALSE,
+                   var.equal = FALSE))
+    }
+}
+```
+
+## Conclusions and Assumptions
+
+**Assuming that the sample sizes are small and the t-test is appropriate**:
+
+We can see there is no statistically significant difference between supplements, as their p.value is `0.06` and the confidence interval goes from `-0.17` to `7.57`, therefore, including `0`.
+
+We also conclude there is statistically significant evidence that there is a correlation between dosage and teeth length, by looking at the plot above and by analyzing the p.values of the tests, all of them very small (smaller than `0.00001`) and with confidence intervals that did not include `0`.
