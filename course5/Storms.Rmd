@@ -1,0 +1,186 @@
+---
+title: "Health and Economic Impacts of Severe Weather Events in the USA"
+output: html_document
+---
+
+## Synopsis
+
+In this report we aim to analyse the impacts of storms and other severe weather events, which can cause both public health and economic problems for communities and municipalities. This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database.
+
+We found out that tornadoes are the events with the most fatalities, followed by Excessive Heat.
+
+We also found out that Flood is what causes more economic damage to the United States, followed by Hurricane Typhoons and Tornadoes.
+
+## Data Processing
+
+The analysis was performed in the National Oceanic and Atmospheric Administration's (NOAA) storm database.
+
+1. [CSV data](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2)
+2. [Data documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)
+3. [Events FAQ Page](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf)
+
+We must first download the CSV file and then load it (it can take a few minutes):
+
+```{r, cache=TRUE}
+  setwd("~/Dev/datasciencecoursera/course5/")
+  download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", "StormData.csv.bz2")
+  storm.data <- read.csv("StormData.csv.bz2")
+```
+
+Let's take a look at the data:
+
+```{r, cache=TRUE}
+  dim(storm.data)
+  summary(storm.data)
+  unique(storm.data$EVTYPE)
+```
+
+We can see that some events are written differently, mostly because of typing issues, but are actually the same (e.g. "TSTM WIND" and "THUNDERSTORM WIND", "LIGHTING" and "LIGHTNING", "Frost" and "FROST").
+
+We will normalize some of the top occurrences of them.
+```{r, cache=TRUE}
+  normalized.data <- storm.data
+  length(unique(normalized.data$EVTYPE))
+```
+
+First, convert everything to UPPER CASE:
+```{r, cache=TRUE}
+  normalized.data$EVTYPE <- toupper(normalized.data$EVTYPE)
+  length(unique(normalized.data$EVTYPE))
+```
+
+Removing unused punctuation:
+```{r, cache=TRUE}
+  normalized.data$EVTYPE <- gsub("[/[:punct:]]+", " ", normalized.data$EVTYPE)
+  length(unique(normalized.data$EVTYPE))
+```
+
+Merging some categories:
+```{r, cache=TRUE}
+  normalized.data[startsWith(normalized.data$EVTYPE, "TORNADO"),]$EVTYPE <- "TORNADO"
+  length(unique(normalized.data$EVTYPE))
+```
+
+Fixing some typos:
+```{r, cache=TRUE}
+  normalized.data[normalized.data$EVTYPE == "LIGHTING",]$EVTYPE <- "LIGHTNING"
+  normalized.data[normalized.data$EVTYPE == "THUNDERSTORM WIND",]$EVTYPE <- "TSTM WIND"
+  normalized.data[normalized.data$EVTYPE == "TORNDAO",]$EVTYPE <- "TORNADO"
+  length(unique(normalized.data$EVTYPE))
+```
+
+Removing double, leading and trailing spaces:
+```{r, cache=TRUE}
+  normalized.data$EVTYPE <- gsub("\\s+", " ", normalized.data$EVTYPE)
+  normalized.data$EVTYPE <- gsub("^\\s*", "", normalized.data$EVTYPE)
+  normalized.data$EVTYPE <- gsub("\\s*$", "", normalized.data$EVTYPE)
+  length(unique(normalized.data$EVTYPE))
+```
+
+We could process the data more, but we covered enough cases.
+
+### Health Impacts
+
+We now group the events to find out which ones are more impactful to the population health.
+
+```{r}
+  library(dplyr)
+  health.impacts <- normalized.data %>%
+    select(EVTYPE, INJURIES, FATALITIES) %>%
+    group_by(EVTYPE) %>%
+    summarise(INJURIES = sum(INJURIES), FATALITIES = sum(FATALITIES)) %>%
+    arrange(desc(FATALITIES), desc(INJURIES))
+```
+
+The 5 events with more impact to health are:
+```{r}
+  head(health.impacts, 5)
+```
+
+### Economic Impacts
+
+We now group the events to find out which ones are more impactful to economy.
+
+To do that, we need to calculate how much each event costs in dollars. We use the fields `PROPDMG` and `CROPDMG`, and its exponents `PROPDMGEXP` and `CROPDMGEXP`.
+
+We need a function to transform the exponents into a multiplier we can use to calculate:
+```{r, cache=TRUE}
+  transform_exponents <- function(exponents) {
+    ALL.EXPONENTS <- list('H' = 100,
+                          'K' = 1000,
+                          'M' = 1000000,
+                          'B' = 1000000000,
+                          '0' = 0,
+                          '2' = 2)
+    ALL.EXPONENTS[toupper(exponents)]
+  }
+```
+
+```{r, cache=TRUE}
+  normalized.data$PROPDMG.multiplier <- transform_exponents(normalized.data$PROPDMGEXP)
+```
+
+```{r, cache=TRUE}
+  normalized.data[normalized.data$PROPDMG.multiplier == 'NULL',]$PROPDMG.multiplier <- 0
+  normalized.data$PROPDMG.multiplier <- as.numeric(normalized.data$PROPDMG.multiplier)
+```
+
+```{r, cache=TRUE}
+  normalized.data$PROPDMG.total <- normalized.data$PROPDMG * normalized.data$PROPDMG.multiplier
+```
+
+```{r, cache=TRUE}  
+  normalized.data$CROPDMG.multiplier <- transform_exponents(normalized.data$CROPDMGEXP)
+```
+
+```{r, cache=TRUE}
+  normalized.data[normalized.data$CROPDMG.multiplier == 'NULL',]$CROPDMG.multiplier <- 0
+  normalized.data$CROPDMG.multiplier <- as.numeric(normalized.data$CROPDMG.multiplier)
+```
+
+```{r, cache=TRUE}
+  normalized.data$CROPDMG.total <- normalized.data$CROPDMG * normalized.data$CROPDMG.multiplier
+```
+
+Then we calculate the damage:
+```{r, cache=TRUE}
+  normalized.data$TOTALDMG <- normalized.data$PROPDMG.total + normalized.data$CROPDMG.total
+  economic.impacts <- normalized.data %>%
+    select(EVTYPE, TOTALDMG) %>%
+    group_by(EVTYPE) %>%
+    summarise(TOTALDMG = sum(TOTALDMG)) %>%
+    arrange(desc(TOTALDMG))
+```
+
+```{r}
+  head(economic.impacts, 5)
+```
+
+## Results
+
+1. Across the United States, which types of events are most harmful with respect to population health?
+
+```{r}
+  library(ggplot2)
+  ggplot(data = head(health.impacts, 5),
+         main = "Top 5 Health Impact Events caused by Weather in the US",
+         aes(x = EVTYPE, y = FATALITIES, fill=EVTYPE)) +
+    geom_bar(stat="identity") +
+    xlab("Event Types") +
+    ylab("Number of Fatalities")
+```
+
+Tornadoes are the most harmful events to population health, with more than 5000 fatalities.
+
+2. Across the United States, which types of events have the greatest economic consequences?
+
+```{r}
+  ggplot(data = head(economic.impacts, 5),
+         main = "Top 5 Economic Impact Events caused by Weather in the US",
+         aes(x = EVTYPE, y = TOTALDMG, fill=EVTYPE)) +
+    geom_bar(stat="identity") +
+    xlab("Event Types") +
+    ylab("Total Cost in Dollars")
+```
+
+Flood is what causes more economic damage to the United States, followed by Hurricane Typhoons and Tornadoes.
